@@ -23,6 +23,7 @@ class Event(str, Enum):
     TAKEN = "taken"              # parent said they took the medicine
     NOT_TAKEN = "not_taken"      # parent said not yet / later
     UNCLEAR = "unclear"          # answer could not be understood
+    OFF_TOPIC = "off_topic"      # understood, but not about the medicine
     NEEDS_HELP = "needs_help"    # parent said they need help or feel unwell
     NO_RESPONSE = "no_response"  # silence, or the call ended
     RETRY_DUE = "retry_due"      # time to try again
@@ -32,6 +33,7 @@ class Action(str, Enum):
     """What the outside world should do. The state machine never does these itself."""
     SPEAK_REMINDER = "speak_reminder"
     SPEAK_CLARIFY = "speak_clarify"
+    SPEAK_OFF_TOPIC = "speak_off_topic"
     SPEAK_THANKS = "speak_thanks"
     SPEAK_RETRY_NOTICE = "speak_retry_notice"
     SPEAK_FAMILY_NOTICE = "speak_family_notice"
@@ -115,9 +117,11 @@ class DoseReminder:
             if event == Event.NEEDS_HELP:
                 self.state = State.ESCALATED
                 return [Action.SPEAK_HELP_ACK, Action.ALERT_URGENT]
-            if event == Event.UNCLEAR:
+            if event in (Event.UNCLEAR, Event.OFF_TOPIC):
                 if self.clarifications < self.max_clarifications:
                     self.clarifications += 1
+                    if event == Event.OFF_TOPIC:
+                        return [Action.SPEAK_OFF_TOPIC]
                     return [Action.SPEAK_CLARIFY]
                 return self._no_confirmation(parent_can_hear=True)
             if event == Event.NOT_TAKEN:
