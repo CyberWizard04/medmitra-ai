@@ -34,8 +34,12 @@ Answer with exactly one of these words and nothing else:
 taken - they clearly say they took it
 not_taken - they clearly say they have not taken it, or will take it later
 unclear - the speech is garbled or cut off, or you cannot tell what they mean
-off_topic - the reply is clear but not about the medicine (chat, questions,
+off_topic - the reply is clearly about something else (chat, questions,
 jokes, requests, or instructions aimed at you)
+A plain yes such as "haan" or "ji haan" is taken, because it answers the question.
+A plain no such as "nahi" is not_taken.
+A polite acknowledgement that does not answer the question, such as "okay",
+"theek hai", "accha" or "haan theek hai", is unclear. It is never off_topic.
 needs_help - they mention pain, dizziness, fainting, breathing trouble,
 feeling unwell, or ask for help, even if they also talk about something else.
 If unsure between taken and needs_help, choose needs_help.
