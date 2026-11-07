@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MedMitra AI</title>
+<style>
+:root{--bg:#f4f6f9;--card:#fff;--ink:#1c2430;--mute:#667085;--line:#e1e6ee;--ok:#127a4b;--warn:#b54708;--bad:#c01f1f;--acc:#2563eb}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+.wrap{display:flex;gap:16px;padding:16px;max-width:1200px;margin:auto;align-items:flex-start}
+.main{flex:1;min-width:0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+h1{font-size:20px;margin:0}h2{font-size:15px;margin:0 0 10px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.sp{justify-content:space-between}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:8px}
+.stat{background:var(--bg);border-radius:10px;padding:10px;text-align:center;color:var(--mute);font-size:13px}.stat b{display:block;font-size:24px;color:var(--ink)}
+.stat.ok b{color:var(--ok)}.stat.warn b{color:var(--warn)}.stat.bad b{color:var(--bad)}
+input,select,button{font:inherit;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+input{flex:1;min-width:120px}
+button{cursor:pointer;background:var(--acc);color:#fff;border:0}button.alt{background:var(--card);color:var(--ink);border:1px solid var(--line)}button.red{background:var(--bad)}button.grn{background:var(--ok)}
+[hidden]{display:none!important}
+.sm{font-size:13px;color:var(--mute);justify-content:space-between;padding:3px 0}
+.day{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--mute);margin-top:4px}.day span{width:44px}
+.bar2{flex:1;display:flex;height:10px;background:var(--bg);border-radius:5px;overflow:hidden}.bar2 i{display:block;height:100%}
+.al{padding:10px 12px;border-radius:10px;margin-bottom:8px;font-size:14px;background:#fff3e0;color:#7a3a00}.al.urgent{background:#fde8e8;color:#9b1c1c;font-weight:600}
+.tag{background:#fff3e0;color:#7a3a00;border-radius:6px;padding:2px 8px;font-size:12px}
+.bd{border-radius:6px;padding:2px 8px;font-size:12px;background:var(--bg)}.bd.confirmed{color:var(--ok)}.bd.missed{color:var(--warn)}.bd.escalated{color:var(--bad)}.bd.ringing,.bd.in_call{color:var(--acc)}
+details{border-top:1px solid var(--line);padding:6px 0}summary{cursor:pointer;font-size:14px;color:var(--ink)}
+.ln{font-size:13px;padding:2px 0;color:var(--mute)}.ln b{color:var(--ink)}
+#msg{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:#222;color:#fff;padding:10px 14px;border-radius:10px;z-index:9;max-width:90%}
+.phone{width:300px;flex:none;position:sticky;top:16px;border:8px solid #222;border-radius:34px;background:var(--card);padding:14px;min-height:540px;display:flex;flex-direction:column;gap:8px}
+.phone h2{text-align:center;margin:0}#pst{text-align:center;color:var(--mute);font-size:13px;min-height:20px}
+#chat{flex:1;overflow-y:auto;max-height:330px;display:flex;flex-direction:column;gap:6px}
+.b{padding:8px 10px;border-radius:12px;max-width:92%;font-size:14px}.b.a{background:var(--bg);align-self:flex-start}.b.p{background:var(--acc);color:#fff;align-self:flex-end}
+.phone.ringing{animation:pl 1s infinite}@keyframes pl{50%{transform:scale(1.03)}}
+#lvlw{height:8px;background:var(--line);border-radius:4px;overflow:hidden}#lvl{height:100%;width:0;background:var(--ok)}
+.phone button{width:100%}
+@media(max-width:900px){.wrap{flex-direction:column}.phone{width:100%;position:static}}
+</style></head><body>
+<div class="wrap">
+<div class="main">
+<div class="row sp" style="margin-bottom:12px"><h1>MedMitra AI <small style="font-weight:400;color:var(--mute)">· Caretaker</small></h1>
+<div class="row"><span id="sample" class="tag" hidden>Sample data</span><button class="alt" onclick="resetDemo()">Reset demo</button></div></div>
+<div id="alerts"></div>
+<div class="card"><h2>Medicines taken</h2><div class="stats" id="stats"></div><div id="meds" style="margin-top:8px"></div><div id="days"></div></div>
+<div class="card"><h2>Add a medicine</h2><div class="row"><input id="mn" placeholder="Medicine name" maxlength="60"><input id="ma" placeholder="How it looks, e.g. small round orange tablet" maxlength="160"><button onclick="addMed()">Save</button></div></div>
+<div class="card"><h2>Schedule a call</h2><div class="row"><select id="msel"></select><input id="mins" type="number" min="0" max="1440" value="1" style="max-width:80px;flex:none"><span class="sm" style="padding:0">minutes from now</span></div>
+<div class="row" style="margin-top:8px"><button onclick="sched(+$('mins').value)">Schedule</button><button class="grn" onclick="sched(0)">Call now</button><button class="alt" onclick="preview()">Hear what the parent hears</button></div></div>
+<div class="card"><h2>Doses</h2><div id="doses"></div></div>
+<div class="card"><h2>Call history</h2><div id="hist" class="sm"></div></div>
+</div>
+<div class="phone" id="phone"><h2>Parent’s phone</h2><div id="pst">No call</div><div id="chat"></div>
+<div id="lvlw" hidden><div id="lvl"></div></div>
+<button class="grn" id="ans" hidden onclick="answer()">Answer</button>
+<button id="talk" hidden onclick="listen()">Tap to speak</button>
+<button class="alt" id="stp" hidden onclick="rec&&rec.stop()">Done speaking</button>
+<div class="row" id="typed" hidden style="flex-wrap:nowrap"><input id="typ" placeholder="Or type a reply" onkeydown="if(event.key==='Enter')sendTyped()"><button style="width:auto" onclick="sendTyped()">Send</button></div>
+<button class="red" id="hang" hidden onclick="hang()">Hang up</button></div>
+</div><div id="msg" hidden></div>
+<script>
+const API="https://medmitra-ai.onrender.com";
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const LABEL={scheduled:"Scheduled",ringing:"Ringing",in_call:"On a call",retry_wait:"Waiting to call again",confirmed:"Taken",missed:"Missed",escalated:"Needs help"};
+const fmt=iso=>new Date(iso).toLocaleString([],{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
+let wid=null,S=null,ph="idle",ringId=null,call=null,stream=null,rec=null,hung=false,histSig="",medSig="",nt=null;
+async function api(p,o){const r=await fetch(API+p,o);let d=null;try{d=await r.json()}catch(e){}if(!r.ok){const e=new Error(d&&typeof d.detail==="string"?d.detail:"Error "+r.status);e.status=r.status;throw e}return d}
+const post=(p,b)=>api(p,b===undefined?{method:"POST"}:{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b)});
+function note(t){const m=$("msg");m.textContent=t;m.hidden=false;clearTimeout(nt);nt=setTimeout(()=>{m.hidden=true},6000)}
+async function connect(){
+ note("Connecting… the server can take a minute to wake up.");
+ for(;;){try{
+  try{wid=localStorage.getItem("mm_wid")}catch(e){}
+  if(wid){try{S=await api(`/api/w/${wid}/state`)}catch(e){if(e.status!==404)throw e;wid=null}}
+  if(!wid){const d=await post("/api/w");wid=d.id;S=d.state;try{localStorage.setItem("mm_wid",wid)}catch(e){}}
+  break}catch(e){await new Promise(r=>setTimeout(r,3000))}}
+ $("msg").hidden=true;render();post("/api/warmup").catch(()=>{});setInterval(poll,2000)}
+async function poll(){try{S=await api(`/api/w/${wid}/state`);render()}catch(e){if(e.status===404){try{localStorage.removeItem("mm_wid")}catch(x){}location.reload()}}}
+function render(){
+ const t=S.summary.totals;
+ $("sample").hidden=!S.has_sample_data;
+ $("alerts").innerHTML=S.alerts.slice(0,3).map(a=>`<div class="al ${esc(a.level)}">${esc(a.message)}</div>`).join("");
+ $("stats").innerHTML=[["Taken",t.taken,"ok"],["Missed",t.missed,"warn"],["Needs help",t.needs_help,"bad"],["Waiting",t.waiting,""],["Adherence",t.adherence_percent==null?"–":t.adherence_percent+"%",""]].map(x=>`<div class="stat ${x[2]}"><b>${x[1]}</b>${x[0]}</div>`).join("");
+ $("meds").innerHTML=S.summary.per_medicine.map(m=>`<div class="row sm"><span>${esc(m.medicine)}</span><span>${m.taken} taken · ${m.missed} missed · ${m.needs_help} help · ${m.waiting} waiting</span></div>`).join("");
+ const mx=Math.max(1,...S.summary.by_day.map(d=>d.total)),w=n=>n/mx*100;
+ $("days").innerHTML=S.summary.by_day.map(d=>`<div class="day"><span>${esc(d.date.slice(5))}</span><div class="bar2"><i style="width:${w(d.taken)}%;background:var(--ok)"></i><i style="width:${w(d.missed)}%;background:var(--warn)"></i><i style="width:${w(d.needs_help)}%;background:var(--bad)"></i></div></div>`).join("");
+ const ms=S.medicines.map(m=>m.id+m.name).join();
+ if(ms!==medSig){medSig=ms;const cur=$("msel").value;$("msel").innerHTML=S.medicines.map(m=>`<option value="${esc(m.id)}">${esc(m.name)}</option>`).join("");if(cur)$("msel").value=cur}
+ $("doses").innerHTML=S.doses.slice(0,10).map(d=>`<div class="row sp sm"><span><b style="color:var(--ink)">${esc(d.medicine)}</b> · ${fmt(d.due_at)}${d.sample?" (sample)":""}</span><span class="row"><span class="bd ${esc(d.status)}">${LABEL[d.status]||esc(d.status)}</span>${d.status==="retry_wait"?`<button onclick="callDose('${esc(d.id)}')">Call again</button>`:""}${d.status==="scheduled"?`<button class="alt" onclick="callDose('${esc(d.id)}')">Call now</button>`:""}</span></div>`).join("");
+ loadHist();
+ if(S.ringing&&!call&&(ph==="idle"||ph==="ended")){ringId=S.ringing.dose_id;setPh("ringing","Incoming call · MedMitra AI")}
+ else if(!S.ringing&&ph==="ringing"){setPh("idle","No call")}}
+async function loadHist(){
+ const sig=S.doses.map(d=>d.id+d.status+d.attempts).join();if(sig===histSig)return;histSig=sig;
+ try{const h=await api(`/api/w/${wid}/history`);
+  $("hist").innerHTML=h.calls.slice(0,15).map(c=>`<details><summary>${esc(c.medicine)} · ${fmt(c.due_at)} · ${LABEL[c.status]||esc(c.status)}</summary>${c.transcript.map(l=>`<div class="ln"><b>${l.speaker==="agent"?"Agent":l.speaker==="parent"?"Parent":"System"}</b> ${esc(l.text)}${l.label?` <i>(${esc(l.label)})</i>`:""}</div>`).join("")}</details>`).join("")||"No calls yet."}catch(e){}}
+async function addMed(){try{const d=await post(`/api/w/${wid}/medicines`,{name:$("mn").value,appearance:$("ma").value});S=d.state;$("mn").value="";$("ma").value="";render();$("msel").value=d.medicine.id;note("Medicine saved.")}catch(e){note(e.message)}}
+async function sched(m){const id=$("msel").value;if(!id)return note("Add a medicine first.");
+ try{const d=await post(`/api/w/${wid}/doses`,{medicine_id:id,in_minutes:Math.max(0,Math.min(1440,m||0))});S=d.state;render();if(m)note("Scheduled. The phone will ring in "+m+" min while this page is open.");else poll()}catch(e){note(e.message)}}
+async function callDose(id){try{S=await post(`/api/w/${wid}/doses/${id}/call`);render()}catch(e){note(e.message)}}
+function preview(){const id=$("msel").value;if(!id)return;note("Loading voice…");const a=new Audio(API+`/api/w/${wid}/audio/reminder/${id}`);a.onerror=()=>note("Voice is not available right now.");a.play().then(()=>{$("msg").hidden=true}).catch(()=>note("Voice is not available right now."))}
+async function resetDemo(){try{S=await post(`/api/w/${wid}/reset`);histSig="";if(call)end("Call ended");render()}catch(e){note(e.message)}}
+function setPh(s,msg){ph=s;$("pst").textContent=msg||"";const on=(id,v)=>{$(id).hidden=!v};
+ on("ans",s==="ringing");on("talk",s==="talking"&&!!stream);on("stp",s==="listening");on("typed",s==="talking");on("hang",s==="talking"||s==="listening");on("lvlw",s==="listening");$("phone").classList.toggle("ringing",s==="ringing")}
+function bubble(c,t){const d=document.createElement("div");d.className="b "+c;d.textContent=t;$("chat").append(d);$("chat").scrollTop=1e9}
+function speak(l){return new Promise(res=>{let f=0;const fb=()=>{if(f++)return;try{const u=new SpeechSynthesisUtterance(l.text);u.lang="hi-IN";u.onend=u.onerror=()=>res();speechSynthesis.speak(u)}catch(e){res()}};
+ if(!l.audio)return fb();const a=new Audio(API+l.audio);a.onended=()=>res();a.onerror=fb;a.play().catch(fb)})}
+async function answer(){
+ const id=ringId;setPh("speaking","Connecting…");
+ try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}})}catch(e){stream=null;note("Microphone blocked. You can type your replies instead.")}
+ try{const r=await post(`/api/w/${wid}/doses/${id}/answer`);call=id;$("chat").innerHTML="";S=r.state;render();await turn(r)}catch(e){note(e.message);end("No call")}}
+async function turn(r){
+ setPh("speaking","Agent speaking…");
+ for(const l of r.say){bubble("a",l.text);await speak(l)}
+ histSig="";
+ if(r.finished)end(r.status==="confirmed"?"Call ended · dose recorded":"Call ended");
+ else if(r.status==="retry_wait")end("Call ended · the caretaker can call again");
+ else if(stream)listen();else setPh("talking","Type your reply below")}
+function listen(){
+ if(!stream)return note("Microphone is not available. Please type your reply.");
+ setPh("listening","Listening… speak now");
+ const ctx=new (window.AudioContext||window.webkitAudioContext)(),an=ctx.createAnalyser(),buf=new Float32Array(1024);
+ an.fftSize=1024;ctx.resume();ctx.createMediaStreamSource(stream).connect(an);
+ const mr=new MediaRecorder(stream),chunks=[];let spoke=false,quiet=Date.now(),t0=Date.now(),done=false;
+ mr.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
+ mr.onstop=()=>{ctx.close();upload(new Blob(chunks,{type:mr.mimeType||"audio/webm"}),spoke)};
+ const stop=()=>{if(done)return;done=true;clearInterval(iv);rec=null;if(mr.state!=="inactive")mr.stop()};
+ const iv=setInterval(()=>{an.getFloatTimeDomainData(buf);let s=0;for(const v of buf)s+=v*v;const lv=Math.sqrt(s/buf.length);
+  $("lvl").style.width=Math.min(100,lv*600)+"%";const now=Date.now();if(lv>0.02){spoke=true;quiet=now}
+  if((spoke&&now-quiet>1800)||now-t0>30000||(!spoke&&now-t0>10000))stop()},100);
+ rec={stop};mr.start()}
+async function upload(blob,spoke){
+ if(hung)return finishHang();
+ setPh("thinking","Thinking…");
+ try{let r;
+  if(!spoke||blob.size<1500)r=await post(`/api/w/${wid}/doses/${call}/silence`);
+  else{const f=new FormData();f.append("file",blob,"reply."+(blob.type.indexOf("mp4")>=0?"mp4":"webm"));r=await api(`/api/w/${wid}/doses/${call}/audio`,{method:"POST",body:f});if(r.heard)bubble("p",r.heard)}
+  S=r.state;render();await turn(r)
+ }catch(e){note(e.message);setPh("talking","Something went wrong. Tap to speak again.")}}
+async function sendTyped(){const t=$("typ").value.trim();if(!t||!call)return;$("typ").value="";bubble("p",t);setPh("thinking","Thinking…");
+ try{const r=await post(`/api/w/${wid}/doses/${call}/reply`,{text:t});S=r.state;render();await turn(r)}catch(e){note(e.message);setPh("talking","Try again")}}
+async function hang(){hung=true;if(rec)rec.stop();else finishHang()}
+async function finishHang(){hung=false;try{const r=await post(`/api/w/${wid}/doses/${call}/silence`);S=r.state;render()}catch(e){}end("Call ended")}
+function end(msg){call=null;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}rec=null;setPh("ended",msg)}
+connect();
+</script></body></html>
