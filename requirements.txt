@@ -3,3 +3,4 @@ fastapi
 httpx
 uvicorn
 tzdata
+python-multipart
