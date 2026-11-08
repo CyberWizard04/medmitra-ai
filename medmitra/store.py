@@ -285,6 +285,17 @@ class Workspace:
             for row in (totals, per_medicine[dose.medicine_id], day_row):
                 row[bucket] += 1
                 row["total"] += 1
+        replies = {label: 0 for label in REPLY_LABELS}
+        replies["no_answer"] = 0
+        for dose in self.doses.values():
+            for entry in dose.transcript:
+                if entry["speaker"] == "parent" and entry["label"] in replies:
+                    replies[entry["label"]] += 1
+                elif entry["speaker"] == "system":
+                    replies["no_answer"] += 1
+        confirmed = [d.reminder.attempts for d in self.doses.values()
+                     if d.reminder.state == State.CONFIRMED]
+        avg_attempts = round(sum(confirmed) / len(confirmed), 1) if confirmed else None
         finished = totals["taken"] + totals["missed"] + totals["needs_help"]
         totals["adherence_percent"] = (
             round(100 * totals["taken"] / finished) if finished else None)
@@ -292,6 +303,8 @@ class Workspace:
             "totals": totals,
             "per_medicine": list(per_medicine.values()),
             "by_day": [by_day[day] for day in sorted(by_day)],
+            "replies": replies,
+            "avg_attempts_to_confirm": avg_attempts,
         }
 
     def snapshot(self):
@@ -330,8 +343,8 @@ class Workspace:
         morning = self.add_medicine("विटामिन सी", "छोटी गोल नारंगी गोली")
         evening = self.add_medicine("कैल्शियम", "बड़ी सफ़ेद गोली")
         morning.sample = evening.sample = True
-        outcomes = ["taken", "taken", "taken", "retry_taken", "taken", "missed", "taken",
-                    "taken", "taken", "taken", "needs_help", "taken", "taken", "retry_taken"]
+        outcomes = ["taken", "ask_taken", "taken", "retry_taken", "unclear_taken", "missed", "taken",
+                    "chat_taken", "taken", "taken", "needs_help", "taken", "ask_taken", "retry_taken"]
         for i, outcome in enumerate(outcomes):
             day = today - timedelta(days=7 - i // 2)
             medicine, hour = (morning, 8) if i % 2 == 0 else (evening, 20)
@@ -356,12 +369,22 @@ class Workspace:
         turn(Event.START)
         if outcome == "taken":
             turn(Event.TAKEN, "हाँ, मैंने दवाई ले ली है।", "taken")
+        elif outcome == "ask_taken":
+            turn(Event.ASKS_MEDICINE, "कौन सी दवाई है?", "asks_medicine")
+            turn(Event.TAKEN, "हाँ, ले ली।", "taken")
+        elif outcome == "unclear_taken":
+            turn(Event.UNCLEAR, "हम्म, ठीक है।", "unclear")
+            turn(Event.TAKEN, "हाँ, ले ली।", "taken")
+        elif outcome == "chat_taken":
+            turn(Event.OFF_TOPIC, "आज मौसम कैसा है?", "off_topic")
+            turn(Event.TAKEN, "हाँ, ले ली।", "taken")
         elif outcome == "retry_taken":
             turn(Event.NOT_TAKEN, "अभी नहीं, थोड़ी देर बाद।", "not_taken")
             turn(Event.RETRY_DUE)
             turn(Event.TAKEN, "हाँ, अब ले ली।", "taken")
         elif outcome == "missed":
             for attempt in range(3):
+                self._note(dose, "system", "Call not answered.", clock[0])
                 turn(Event.NO_RESPONSE)
                 if attempt < 2:
                     turn(Event.RETRY_DUE)

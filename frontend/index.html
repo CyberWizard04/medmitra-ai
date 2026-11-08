@@ -35,13 +35,35 @@ details{border-top:1px solid var(--line);padding:6px 0}summary{cursor:pointer;fo
 #lvlw{height:8px;background:var(--line);border-radius:4px;overflow:hidden}#lvl{height:100%;width:0;background:var(--ok)}
 .phone button{width:100%}
 @media(max-width:900px){.wrap{flex-direction:column}.phone{width:100%;position:static}}
+
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.ch{border:1px solid var(--line);border-radius:10px;padding:10px;min-width:0}
+.ch.wide{grid-column:1/-1}
+.ch h3{font-size:13px;margin:0 0 8px;color:var(--mute);font-weight:600}
+.ch svg{width:100%;height:auto;display:block}
+.dn{display:flex;align-items:center;gap:14px}.dn svg{width:130px;flex:none}
+.lg{font-size:13px;margin:5px 0;display:flex;align-items:center;gap:6px}.lg i{width:10px;height:10px;border-radius:3px;display:inline-block}
+.hb{display:flex;align-items:center;gap:8px;margin:7px 0;font-size:13px}
+.hl{width:120px;flex:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ht{flex:1;display:flex;height:12px;background:var(--bg);border-radius:6px;overflow:hidden}
+.ht i{display:block;height:100%}
+.hv{width:104px;flex:none;text-align:right;color:var(--mute)}
+.empty{color:var(--mute);font-size:13px;padding:22px 0;text-align:center}
 </style></head><body>
 <div class="wrap">
 <div class="main">
 <div class="row sp" style="margin-bottom:12px"><h1>MedMitra AI <small style="font-weight:400;color:var(--mute)">· Caretaker</small></h1>
 <div class="row"><span id="sample" class="tag" hidden>Sample data</span><button class="alt" onclick="resetDemo()">Reset demo</button></div></div>
 <div id="alerts"></div>
-<div class="card"><h2>Medicines taken</h2><div class="stats" id="stats"></div><div id="meds" style="margin-top:8px"></div><div id="days"></div></div>
+<div class="card"><div class="row sp"><h2 style="margin:0">Analytics</h2><span class="sm" style="padding:0">Updates every 2 seconds</span></div>
+<div class="stats" id="kpis" style="margin:10px 0"></div>
+<div class="grid2">
+<div class="ch"><h3>Outcomes</h3><div id="c-donut"></div></div>
+<div class="ch"><h3>Doses per day</h3><div id="c-days"></div></div>
+<div class="ch"><h3>Adherence trend</h3><div id="c-trend"></div></div>
+<div class="ch"><h3>By medicine</h3><div id="c-meds"></div></div>
+<div class="ch wide"><h3>What the parent said</h3><div id="c-said"></div></div>
+</div></div>
 <div class="card"><h2>Parent</h2><div class="row"><input id="pname" placeholder="Parent’s name, e.g. Atharv" maxlength="40"><button onclick="saveName()">Save name</button></div></div>
 <div class="card"><h2>Add a medicine</h2><div class="row"><input id="mn" placeholder="Medicine name" maxlength="60"><input id="ma" placeholder="How it looks, e.g. small round orange tablet" maxlength="160"><button onclick="addMed()">Save</button></div></div>
 <div class="card"><h2>Schedule a call</h2><div class="row"><select id="msel"></select><input id="mins" type="number" min="0" max="1440" value="1" style="max-width:80px;flex:none"><span class="sm" style="padding:0">minutes from now</span></div>
@@ -80,10 +102,7 @@ function render(){
  const t=S.summary.totals;
  $("sample").hidden=!S.has_sample_data;if(document.activeElement!==$("pname"))$("pname").value=S.parent_name||"";
  $("alerts").innerHTML=S.alerts.slice(0,3).map(a=>`<div class="al ${esc(a.level)}">${esc(a.message)}</div>`).join("");
- $("stats").innerHTML=[["Taken",t.taken,"ok"],["Missed",t.missed,"warn"],["Needs help",t.needs_help,"bad"],["Waiting",t.waiting,""],["Adherence",t.adherence_percent==null?"–":t.adherence_percent+"%",""]].map(x=>`<div class="stat ${x[2]}"><b>${x[1]}</b>${x[0]}</div>`).join("");
- $("meds").innerHTML=S.summary.per_medicine.map(m=>`<div class="row sm"><span>${esc(m.medicine)}</span><span>${m.taken} taken · ${m.missed} missed · ${m.needs_help} help · ${m.waiting} waiting</span></div>`).join("");
- const mx=Math.max(1,...S.summary.by_day.map(d=>d.total)),w=n=>n/mx*100;
- $("days").innerHTML=S.summary.by_day.map(d=>`<div class="day"><span>${esc(d.date.slice(5))}</span><div class="bar2"><i style="width:${w(d.taken)}%;background:var(--ok)"></i><i style="width:${w(d.missed)}%;background:var(--warn)"></i><i style="width:${w(d.needs_help)}%;background:var(--bad)"></i></div></div>`).join("");
+ renderDash();
  const ms=S.medicines.map(m=>m.id+m.name).join();
  if(ms!==medSig){medSig=ms;const cur=$("msel").value;$("msel").innerHTML=S.medicines.map(m=>`<option value="${esc(m.id)}">${esc(m.name)}</option>`).join("");if(cur)$("msel").value=cur}
  $("doses").innerHTML=S.doses.slice(0,10).map(d=>`<div class="row sp sm"><span><b style="color:var(--ink)">${esc(d.medicine)}</b> · ${fmt(d.due_at)}${d.sample?" (sample)":""}</span><span class="row"><span class="bd ${esc(d.status)}">${LABEL[d.status]||esc(d.status)}</span>${d.status==="retry_wait"?`<button onclick="callDose('${esc(d.id)}')">Call again</button>`:""}${d.status==="scheduled"?`<button class="alt" onclick="callDose('${esc(d.id)}')">Call now</button>`:""}</span></div>`).join("");
@@ -144,5 +163,64 @@ async function sendTyped(){const t=$("typ").value.trim();if(!t||!call)return;$("
 async function hang(){hung=true;if(rec)rec.stop();else finishHang()}
 async function finishHang(){hung=false;try{const r=await post(`/api/w/${wid}/doses/${call}/silence`);S=r.state;render()}catch(e){}end("Call ended")}
 function end(msg){call=null;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}rec=null;setPh("ended",msg)}
+const OK4=["taken","missed","needs_help","waiting"];
+const OC={taken:"#127a4b",missed:"#b54708",needs_help:"#c01f1f",waiting:"#98a2b3"};
+const OL={taken:"Taken",missed:"Missed",needs_help:"Needs help",waiting:"Waiting"};
+const RO=["taken","not_taken","asks_medicine","unclear","off_topic","needs_help","no_answer"];
+const RLBL={taken:"Said taken",not_taken:"Not yet",asks_medicine:"Asked about medicine",unclear:"Unclear or just okay",off_topic:"Off-topic",needs_help:"Asked for help",no_answer:"No answer"};
+const RCOL={taken:"#127a4b",not_taken:"#b54708",asks_medicine:"#2563eb",unclear:"#7c6bd6",off_topic:"#98a2b3",needs_help:"#c01f1f",no_answer:"#475467"};
+const pct=(a,b)=>b?Math.round(100*a/b):null;
+const fin=r=>r.taken+r.missed+r.needs_help;
+const empty=m=>`<div class="empty">${m}</div>`;
+const dlab=iso=>{const p=iso.split("-");return p[2]+"/"+p[1]};
+let dashSig="";
+function gridY(left,W,H,sc,vals,show){return vals.map(v=>{const y=H-v*sc;return `<line x1="${left}" x2="${W}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#e1e6ee"/><text x="${left-4}" y="${(y+3).toFixed(1)}" text-anchor="end" font-size="8" fill="#667085">${show(v)}</text>`}).join("")}
+function xlab(days,left,band,H){return days.map((d,i)=>`<text x="${(left+band*i+band/2).toFixed(1)}" y="${H+12}" text-anchor="middle" font-size="8" fill="#667085">${dlab(d.date)}</text>`).join("")}
+function donut(t){
+ if(!t.total)return empty("No doses yet.");
+ const R=42,C=2*Math.PI*R;let acc=0,segs="";
+ for(const k of OK4){const v=t[k];if(!v)continue;const d=v/t.total*C;
+  segs+=`<circle cx="60" cy="60" r="${R}" fill="none" stroke="${OC[k]}" stroke-width="16" stroke-dasharray="${d.toFixed(2)} ${(C-d).toFixed(2)}" stroke-dashoffset="${(-acc).toFixed(2)}" transform="rotate(-90 60 60)"><title>${OL[k]}: ${v}</title></circle>`;acc+=d}
+ const mid=t.adherence_percent==null?"–":t.adherence_percent+"%";
+ const leg=OK4.map(k=>`<div class="lg"><i style="background:${OC[k]}"></i>${OL[k]} <b>${t[k]}</b></div>`).join("");
+ return `<div class="dn"><svg viewBox="0 0 120 120" role="img" aria-label="Dose outcomes"><circle cx="60" cy="60" r="${R}" fill="none" stroke="#eef1f6" stroke-width="16"/>${segs}<text x="60" y="58" text-anchor="middle" font-size="20" font-weight="700" fill="#1c2430">${mid}</text><text x="60" y="74" text-anchor="middle" font-size="9" fill="#667085">adherence</text></svg><div>${leg}</div></div>`}
+function dayBars(days){
+ if(!days.length)return empty("No doses yet.");
+ const W=420,H=150,top=14,left=26,band=(W-left)/days.length,bw=Math.min(30,band*.62);
+ const mx=Math.max(1,...days.map(d=>d.total)),sc=(H-top)/mx;
+ let g=gridY(left,W,H,sc,[...new Set([0,Math.ceil(mx/2),mx])],v=>v);
+ days.forEach((d,i)=>{const cx=left+band*i+band/2;let y=H;
+  for(const k of OK4){const v=d[k];if(!v)continue;const h=v*sc;y-=h;
+   g+=`<rect x="${(cx-bw/2).toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" fill="${OC[k]}"><title>${dlab(d.date)}: ${v} ${OL[k].toLowerCase()}</title></rect>`}});
+ return `<svg viewBox="0 0 ${W} ${H+18}" role="img" aria-label="Doses per day">${g}${xlab(days,left,band,H)}</svg>`}
+function trend(days){
+ const pts=days.map((d,i)=>({d,i,p:pct(d.taken,fin(d))})).filter(x=>x.p!=null);
+ if(!pts.length)return empty("No finished doses yet.");
+ const W=420,H=150,top=10,left=30,band=(W-left)/days.length,sc=(H-top)/100;
+ const xy=x=>[left+band*x.i+band/2,H-x.p*sc];
+ let g=gridY(left,W,H,sc,[0,50,100],v=>v+"%");
+ g+=`<polyline points="${pts.map(x=>xy(x).map(v=>v.toFixed(1)).join(",")).join(" ")}" fill="none" stroke="#2563eb" stroke-width="2" stroke-linejoin="round"/>`;
+ for(const x of pts){const [cx,cy]=xy(x);g+=`<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="3.5" fill="#2563eb"><title>${dlab(x.d.date)}: ${x.p}% (${x.d.taken} of ${fin(x.d)} finished doses)</title></circle>`}
+ return `<svg viewBox="0 0 ${W} ${H+18}" role="img" aria-label="Adherence trend">${g}${xlab(days,left,band,H)}</svg>`}
+function medBars(rows){
+ if(!rows.length)return empty("No medicines yet.");
+ return rows.map(m=>{const a=pct(m.taken,fin(m));
+  const seg=OK4.map(k=>m[k]?`<i style="width:${100*m[k]/m.total}%;background:${OC[k]}" title="${OL[k]}: ${m[k]}"></i>`:"").join("");
+  return `<div class="hb"><span class="hl" title="${esc(m.medicine)}">${esc(m.medicine)}</span><div class="ht">${seg}</div><span class="hv">${m.total} doses · ${a==null?"–":a+"%"}</span></div>`}).join("")}
+function saidBars(r){
+ const tot=RO.reduce((s,k)=>s+(r[k]||0),0);
+ if(!tot)return empty("No replies yet. Make a call.");
+ const mx=Math.max(1,...RO.map(k=>r[k]||0));
+ return RO.map(k=>{const v=r[k]||0;return `<div class="hb"><span class="hl">${RLBL[k]}</span><div class="ht"><i style="width:${100*v/mx}%;background:${RCOL[k]}"></i></div><span class="hv">${v}</span></div>`}).join("")}
+function renderDash(){
+ const sig=JSON.stringify(S.summary);if(sig===dashSig)return;dashSig=sig;
+ const sm=S.summary,t=sm.totals,days=sm.by_day.slice(-14);
+ $("kpis").innerHTML=[["Adherence",t.adherence_percent==null?"–":t.adherence_percent+"%",""],["Taken",t.taken,"ok"],["Missed",t.missed,"warn"],["Needs help",t.needs_help,"bad"],["Waiting",t.waiting,""],["Avg reminders per dose",sm.avg_attempts_to_confirm==null?"–":sm.avg_attempts_to_confirm,""]].map(x=>`<div class="stat ${x[2]}"><b>${x[1]}</b>${x[0]}</div>`).join("");
+ $("c-donut").innerHTML=donut(t);
+ $("c-days").innerHTML=dayBars(days);
+ $("c-trend").innerHTML=trend(days);
+ $("c-meds").innerHTML=medBars(sm.per_medicine);
+ $("c-said").innerHTML=saidBars(sm.replies||{});
+}
 connect();
 </script></body></html>
