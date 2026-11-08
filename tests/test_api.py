@@ -6,7 +6,9 @@ from fastapi.testclient import TestClient
 from medmitra import api, voice
 from medmitra.limits import Budget
 from medmitra.reminder import Action
-from medmitra.script import SPEECH, reminder_text
+from medmitra.script import (
+    FIXED_LINES, SPEECH, reminder_intro_text, reminder_lines,
+)
 
 client = TestClient(api.app)
 MED_NAME = "Vitamin C"
@@ -29,7 +31,7 @@ def clean(monkeypatch):
 
 
 def fake_label(label, source="groq"):
-    return lambda text: (label, source)
+    return lambda text, question=None: (label, source)
 
 
 def new_workspace():
@@ -182,8 +184,8 @@ def test_cannot_ring_a_dose_twice():
 
 def test_full_call_with_typed_reply(monkeypatch):
     wid, medicine_id, dose_id, started = in_call()
-    assert started["say"][0]["text"] == reminder_text(MED_NAME, MED_LOOK)
-    assert started["say"][0]["audio"] == f"/api/w/{wid}/audio/reminder/{medicine_id}"
+    assert [line["text"] for line in started["say"]] == reminder_lines("", MED_NAME, MED_LOOK)
+    assert started["say"][-1]["audio"] == "/api/audio/line/question"
     monkeypatch.setattr(api, "classify", fake_label("taken"))
     done = client.post(f"/api/w/{wid}/doses/{dose_id}/reply", json={"text": "haan, le li"}).json()
     assert done["status"] == "confirmed"
@@ -200,9 +202,9 @@ def test_history_keeps_the_conversation(monkeypatch):
     calls = client.get(f"/api/w/{wid}/history").json()["calls"]
     assert len(calls) == 15
     transcript = calls[0]["transcript"]
-    assert [line["speaker"] for line in transcript] == ["agent", "parent", "agent"]
-    assert transcript[1]["text"] == "haan, le li"
-    assert transcript[1]["label"] == "taken"
+    assert [line["speaker"] for line in transcript] == ["agent"] * 3 + ["parent", "agent"]
+    assert transcript[3]["text"] == "haan, le li"
+    assert transcript[3]["label"] == "taken"
 
 
 def test_typed_reply_needs_a_call_in_progress(monkeypatch):
@@ -228,7 +230,7 @@ def test_call_again_after_not_taken(monkeypatch):
     assert ringing["ringing"]["dose_id"] == dose_id
     again = client.post(f"/api/w/{wid}/doses/{dose_id}/answer").json()
     assert again["status"] == "in_call"
-    assert again["say"][0]["audio"] == f"/api/w/{wid}/audio/reminder/{medicine_id}"
+    assert len(again["say"]) == 3
 
 
 def test_hanging_up_or_silence_counts_as_no_answer():
@@ -341,7 +343,7 @@ def test_only_script_lines_can_be_synthesised(monkeypatch):
 
 
 def test_every_script_line_has_a_working_audio_route():
-    assert set(api._FIXED_REFS) == set(SPEECH.values())
+    assert set(api._FIXED_REFS) == set(FIXED_LINES.values())
     for url in api._FIXED_REFS.values():
         assert client.get(url).status_code == 200
 
@@ -352,7 +354,7 @@ def test_reminder_audio_speaks_the_saved_medicine_and_nothing_else(monkeypatch):
     wid, _ = new_workspace()
     medicine_id = add_medicine(wid)
     assert client.get(f"/api/w/{wid}/audio/reminder/{medicine_id}").status_code == 200
-    assert spoken_text == [reminder_text(MED_NAME, MED_LOOK)]
+    assert spoken_text == [reminder_intro_text(MED_NAME, MED_LOOK)]
     assert client.get(f"/api/w/{wid}/audio/reminder/nope").status_code == 404
     other, _ = new_workspace()
     assert client.get(f"/api/w/{other}/audio/reminder/{medicine_id}").status_code == 404
@@ -378,16 +380,16 @@ def test_scheduling_prepares_the_reminder_audio(monkeypatch):
     monkeypatch.setattr(voice, "tts", lambda text: spoken_text.append(text) or b"RIFF-fake-wav")
     wid, _ = new_workspace()
     schedule(wid, add_medicine(wid), 30)
-    assert reminder_text(MED_NAME, MED_LOOK) in spoken_text
+    assert reminder_intro_text(MED_NAME, MED_LOOK) in spoken_text
 
 
 def test_warmup_prepares_every_fixed_line_once(monkeypatch):
     spoken_text = []
     monkeypatch.setattr(voice, "tts", lambda text: spoken_text.append(text) or b"RIFF-fake-wav")
     assert client.post("/api/warmup").status_code == 200
-    assert sorted(spoken_text) == sorted(SPEECH.values())
+    assert sorted(spoken_text) == sorted(FIXED_LINES.values())
     client.post("/api/warmup")
-    assert len(spoken_text) == len(SPEECH)
+    assert len(spoken_text) == len(FIXED_LINES)
 
 
 # ---------- browser access and caps ----------

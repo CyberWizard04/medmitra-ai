@@ -29,7 +29,9 @@ from medmitra import voice
 from medmitra.brain import classify, safety_check
 from medmitra.limits import Budget
 from medmitra.reminder import State
-from medmitra.script import SPEECH, reminder_text
+from medmitra.script import (
+    FIXED_LINES, greeting_text, medicine_info_text, reminder_intro_text, reminder_lines,
+)
 from medmitra.store import BadRequest, Conflict, NotFound, Workspace
 
 ALLOWED_ORIGINS = [
@@ -51,7 +53,7 @@ CACHE_LOCK = threading.Lock()
 AUDIO_CACHE = OrderedDict()
 
 # Spoken line -> the URL that serves its audio
-_FIXED_REFS = {text: f"/api/audio/line/{action.value}" for action, text in SPEECH.items()}
+_FIXED_REFS = {text: f"/api/audio/line/{key}" for key, text in FIXED_LINES.items()}
 
 app = FastAPI(title="MedMitra AI demo")
 app.add_middleware(
@@ -124,21 +126,27 @@ def _check_in_call(workspace, dose_id):
         raise NotFound("No such dose.")
     if dose.reminder.state != State.REMINDED:
         raise Conflict("No call is in progress for this dose.")
+    return workspace.last_agent_line(dose_id)
 
 
 def _say_items(wid, workspace, dose_id, lines):
     """Each spoken line, with the URL where its audio can be fetched."""
     dose = workspace.doses[dose_id]
     medicine = workspace.medicines[dose.medicine_id]
-    reminder = reminder_text(medicine.name, medicine.appearance)
-    items = []
-    for line in lines:
-        if line == reminder:
-            audio = f"/api/w/{wid}/audio/reminder/{medicine.id}"
-        else:
-            audio = _FIXED_REFS.get(line)
-        items.append({"text": line, "audio": audio})
-    return items
+    return _items_for(wid, workspace, medicine, lines)
+
+
+def _items_for(wid, workspace, medicine, lines):
+    """Each spoken line, with the URL where its audio can be fetched."""
+    refs = {
+        greeting_text(workspace.parent_name): f"/api/w/{wid}/audio/greeting",
+        reminder_intro_text(medicine.name, medicine.appearance):
+            f"/api/w/{wid}/audio/reminder/{medicine.id}",
+        medicine_info_text(medicine.name, medicine.appearance):
+            f"/api/w/{wid}/audio/info/{medicine.id}",
+    }
+    refs.update(_FIXED_REFS)
+    return [{"text": line, "audio": refs.get(line)} for line in lines]
 
 
 def _turn_response(wid, workspace, dose_id, result, extra=None):
@@ -152,13 +160,13 @@ def _turn_response(wid, workspace, dose_id, result, extra=None):
     return response
 
 
-def _classify_text(text):
+def _classify_text(text, question=None):
     """Returns (label, source). Safety words never need the AI or the cap."""
     if safety_check(text):
-        return classify(text)
+        return classify(text, question=question)
     if not TURN_BUDGET.allow():
         raise HTTPException(503, "The demo is busy right now. Please try again in a few minutes.")
-    return classify(text)
+    return classify(text, question=question)
 
 
 def _synthesize(text):
@@ -188,7 +196,7 @@ def _prewarm(text):
 
 
 def _prewarm_fixed_lines():
-    for text in SPEECH.values():
+    for text in FIXED_LINES.values():
         _prewarm(text)
 
 
@@ -262,9 +270,11 @@ def schedule_dose(wid: str, body: DoseIn, background: BackgroundTasks):
         due = body.due_at if body.due_at is not None else _now() + timedelta(minutes=body.in_minutes)
         dose = workspace.schedule_dose(body.medicine_id, due)
         medicine = workspace.medicines[dose.medicine_id]
-        text = reminder_text(medicine.name, medicine.appearance)
+        texts = [greeting_text(workspace.parent_name),
+                 reminder_intro_text(medicine.name, medicine.appearance)]
         result = {"dose_id": dose.id, "state": workspace.snapshot()}
-    background.add_task(_prewarm, text)  # so the call starts without a wait
+    for text in texts:
+        background.add_task(_prewarm, text)  # so the call starts without a wait
     return result
 
 
@@ -296,7 +306,7 @@ def parent_audio(wid: str, dose_id: str, file: UploadFile = File(...)):
     if not data:
         raise BadRequest("The recording was empty.")
     with LOCK:
-        _check_in_call(_get(wid), dose_id)  # spend nothing on a dose that is not in a call
+        question = _check_in_call(_get(wid), dose_id)  # spend nothing on a dose that is not in a call
     if not TURN_BUDGET.allow():
         raise HTTPException(503, "The demo is busy right now. Please try again in a few minutes.")
 
@@ -310,7 +320,7 @@ def parent_audio(wid: str, dose_id: str, file: UploadFile = File(...)):
     elif not text.strip():
         label, source, spoken = "no_response", "silence", ""
     else:
-        label, source = classify(text)
+        label, source = classify(text, question=question)
         spoken = text
 
     with LOCK:
@@ -329,8 +339,8 @@ def parent_text(wid: str, dose_id: str, body: ReplyIn):
     if not body.text.strip():
         raise BadRequest("The reply was empty.")
     with LOCK:
-        _check_in_call(_get(wid), dose_id)
-    label, source = _classify_text(body.text)
+        question = _check_in_call(_get(wid), dose_id)
+    label, source = _classify_text(body.text, question)
     with LOCK:
         workspace = _get(wid)
         result = workspace.parent_reply(dose_id, body.text, label, source, _now())
@@ -353,9 +363,9 @@ def parent_silence(wid: str, dose_id: str):
 @app.get("/api/audio/line/{action}")
 def fixed_line_audio(action: str):
     """Audio for one fixed script line. Only lines from the script can be requested."""
-    for known, text in SPEECH.items():
-        if known.value == action:
-            return _wav(_synthesize(text))
+    text = FIXED_LINES.get(action)
+    if text is not None:
+        return _wav(_synthesize(text))
     raise HTTPException(404, "No such line.")
 
 
@@ -366,5 +376,52 @@ def reminder_audio(wid: str, medicine_id: str):
         medicine = _get(wid).medicines.get(medicine_id)
         if medicine is None:
             raise HTTPException(404, "No such medicine.")
-        text = reminder_text(medicine.name, medicine.appearance)
+        text = reminder_intro_text(medicine.name, medicine.appearance)
     return _wav(_synthesize(text))
+
+
+
+class ParentIn(BaseModel):
+    name: str = Field(default="", max_length=200)
+
+
+@app.post("/api/w/{wid}/parent")
+def set_parent(wid: str, body: ParentIn, background: BackgroundTasks):
+    """Saves the parent's name. The agent greets them by it."""
+    with LOCK:
+        workspace = _get(wid)
+        workspace.set_parent_name(body.name)
+        greeting = greeting_text(workspace.parent_name)
+        state = workspace.snapshot()
+    background.add_task(_prewarm, greeting)
+    return state
+
+
+@app.get("/api/w/{wid}/audio/greeting")
+def greeting_audio(wid: str):
+    with LOCK:
+        text = greeting_text(_get(wid).parent_name)
+    return _wav(_synthesize(text))
+
+
+@app.get("/api/w/{wid}/audio/info/{medicine_id}")
+def info_audio(wid: str, medicine_id: str):
+    """The medicine's name and look, built on the server from what the caretaker saved."""
+    with LOCK:
+        medicine = _get(wid).medicines.get(medicine_id)
+        if medicine is None:
+            raise HTTPException(404, "No such medicine.")
+        text = medicine_info_text(medicine.name, medicine.appearance)
+    return _wav(_synthesize(text))
+
+
+@app.get("/api/w/{wid}/preview/{medicine_id}")
+def preview(wid: str, medicine_id: str):
+    """What the parent will hear for this medicine, so the caretaker can check it."""
+    with LOCK:
+        workspace = _get(wid)
+        medicine = workspace.medicines.get(medicine_id)
+        if medicine is None:
+            raise HTTPException(404, "No such medicine.")
+        lines = reminder_lines(workspace.parent_name, medicine.name, medicine.appearance)
+        return {"say": _items_for(wid, workspace, medicine, lines)}

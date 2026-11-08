@@ -1,13 +1,16 @@
 """Everything the agent says (Hindi) and the alerts the caretaker reads (English).
 
 All lines are fixed. The AI never writes what the agent says, so it cannot drift
-into medical advice. A medicine name and description come from the caretaker and
-are only repeated, never interpreted.
+into medical advice. The parent's name, the medicine name and its description come
+from the caretaker and are only repeated, never interpreted.
 """
 from medmitra.reminder import Action
 
+# Every reminder ends with this question.
+QUESTION = "क्या आप अभी दवाई ले रहे हैं?"
+
 SPEECH = {
-    Action.SPEAK_CLARIFY: "माफ़ कीजिए, मुझे समझ नहीं आया। कृपया बताइए, क्या आपने दवाई ले ली है?",
+    Action.SPEAK_CLARIFY: "जी, कृपया एक बार और बताइए। क्या आपने दवाई ले ली है?",
     Action.SPEAK_OFF_TOPIC: (
         "मैं यहाँ सिर्फ़ आपको दवाई याद दिलाने के लिए हूँ। "
         "बाकी बातों के लिए कृपया अपने देखभाल करने वाले से संपर्क करें। "
@@ -22,6 +25,10 @@ SPEECH = {
     ),
 }
 
+# Every fixed line, by the key its audio route uses.
+FIXED_LINES = {action.value: text for action, text in SPEECH.items()}
+FIXED_LINES["question"] = QUESTION
+
 ALERT_TEXT = {
     Action.ALERT_WARNING: (
         "Missed dose: {medicine} was not confirmed after all attempts. "
@@ -34,21 +41,36 @@ ALERT_TEXT = {
 }
 
 
-def reminder_text(name, appearance=""):
-    """The reminder for one medicine, with how it looks if the caretaker said."""
+def greeting_text(parent_name=""):
+    name = " ".join(str(parent_name or "").split())
+    return f"हैलो {name} जी।" if name else "हैलो।"
+
+
+def medicine_info_text(name, appearance=""):
     appearance = (appearance or "").strip().rstrip("।.!? ")
-    text = f"नमस्ते। अब आपकी दवाई का समय हो गया है। दवाई का नाम है {name}।"
+    text = f"दवाई का नाम है {name}।"
     if appearance:
         text += f" इसकी पहचान यह है: {appearance}।"
-    return text + " क्या आपने दवाई ले ली है?"
+    return text
 
 
-def spoken_lines(actions, name, appearance=""):
+def reminder_intro_text(name, appearance=""):
+    return "आपकी दवाई लेने का समय हो गया है। " + medicine_info_text(name, appearance)
+
+
+def reminder_lines(parent_name, name, appearance=""):
+    """The reminder as three messages: greeting, which medicine, the question."""
+    return [greeting_text(parent_name), reminder_intro_text(name, appearance), QUESTION]
+
+
+def spoken_lines(actions, parent_name, medicine_name, appearance=""):
     """The Hindi lines to speak for a list of actions."""
     lines = []
     for action in actions:
         if action == Action.SPEAK_REMINDER:
-            lines.append(reminder_text(name, appearance))
+            lines.extend(reminder_lines(parent_name, medicine_name, appearance))
+        elif action == Action.SPEAK_MEDICINE_INFO:
+            lines.extend([medicine_info_text(medicine_name, appearance), QUESTION])
         elif action in SPEECH:
             lines.append(SPEECH[action])
     return lines

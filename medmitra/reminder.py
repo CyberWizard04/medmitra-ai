@@ -24,6 +24,7 @@ class Event(str, Enum):
     NOT_TAKEN = "not_taken"      # parent said not yet / later
     UNCLEAR = "unclear"          # answer could not be understood
     OFF_TOPIC = "off_topic"      # understood, but not about the medicine
+    ASKS_MEDICINE = "asks_medicine"  # asked which medicine it is or what it looks like
     NEEDS_HELP = "needs_help"    # parent said they need help or feel unwell
     NO_RESPONSE = "no_response"  # silence, or the call ended
     RETRY_DUE = "retry_due"      # time to try again
@@ -34,6 +35,7 @@ class Action(str, Enum):
     SPEAK_REMINDER = "speak_reminder"
     SPEAK_CLARIFY = "speak_clarify"
     SPEAK_OFF_TOPIC = "speak_off_topic"
+    SPEAK_MEDICINE_INFO = "speak_medicine_info"
     SPEAK_THANKS = "speak_thanks"
     SPEAK_RETRY_NOTICE = "speak_retry_notice"
     SPEAK_FAMILY_NOTICE = "speak_family_notice"
@@ -56,9 +58,11 @@ class DoseReminder:
     medicine: str
     max_attempts: int = 3
     max_clarifications: int = 2
+    max_info_requests: int = 2
     state: State = State.PENDING
     attempts: int = 0
     clarifications: int = 0
+    info_requests: int = 0
     history: list = field(default_factory=list)
 
     @property
@@ -102,12 +106,14 @@ class DoseReminder:
             self.state = State.REMINDED
             self.attempts = 1
             self.clarifications = 0
+            self.info_requests = 0
             return [Action.SPEAK_REMINDER]
 
         if self.state == State.RETRY_WAIT and event == Event.RETRY_DUE:
             self.state = State.REMINDED
             self.attempts += 1
             self.clarifications = 0
+            self.info_requests = 0
             return [Action.SPEAK_REMINDER]
 
         if self.state == State.REMINDED:
@@ -117,6 +123,11 @@ class DoseReminder:
             if event == Event.NEEDS_HELP:
                 self.state = State.ESCALATED
                 return [Action.SPEAK_HELP_ACK, Action.ALERT_URGENT]
+            if event == Event.ASKS_MEDICINE:
+                if self.info_requests < self.max_info_requests:
+                    self.info_requests += 1
+                    return [Action.SPEAK_MEDICINE_INFO]
+                return self._no_confirmation(parent_can_hear=True)
             if event in (Event.UNCLEAR, Event.OFF_TOPIC):
                 if self.clarifications < self.max_clarifications:
                     self.clarifications += 1

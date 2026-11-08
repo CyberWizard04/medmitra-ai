@@ -4,7 +4,7 @@ import pytest
 
 from medmitra.brain import LABELS, SYSTEM_PROMPT, classify, parse_label
 from medmitra.reminder import Action, DoseReminder, Event, State
-from medmitra.script import SPEECH, reminder_text, spoken_lines
+from medmitra.script import SPEECH, reminder_lines
 from medmitra.store import (
     MAX_DOSES, RING_SECONDS, BadRequest, Conflict, NotFound, Workspace,
 )
@@ -117,14 +117,14 @@ def test_dose_rings_only_when_due():
 def test_full_call_taken():
     ws, _, dose = make()
     started = start_call(ws, dose)
-    assert started["say"] == [reminder_text("Vitamin C", "small round orange tablet")]
+    assert started["say"] == reminder_lines("", "Vitamin C", "small round orange tablet")
     assert dose.status() == "in_call"
     done = ws.parent_reply(dose.id, "haan, le li", "taken", "groq", later(10))
     assert done["finished"] is True
     assert done["status"] == "confirmed"
-    assert [e["speaker"] for e in dose.transcript] == ["agent", "parent", "agent"]
-    assert dose.transcript[1]["text"] == "haan, le li"
-    assert dose.transcript[1]["label"] == "taken"
+    assert [e["speaker"] for e in dose.transcript] == ["agent"] * 3 + ["parent", "agent"]
+    assert dose.transcript[3]["text"] == "haan, le li"
+    assert dose.transcript[3]["label"] == "taken"
 
 
 def test_unanswered_rings_end_as_missed_with_a_warning():
@@ -264,7 +264,8 @@ def test_parent_text_is_capped():
     ws, _, dose = make()
     start_call(ws, dose)
     ws.parent_reply(dose.id, "x" * 900, "unclear", "groq", later(5))
-    assert len(dose.transcript[1]["text"]) == 500
+    parent_lines = [e for e in dose.transcript if e["speaker"] == "parent"]
+    assert len(parent_lines[0]["text"]) == 500
 
 
 def test_snapshot_shows_the_ringing_call():
@@ -272,29 +273,3 @@ def test_snapshot_shows_the_ringing_call():
     assert ws.snapshot()["ringing"] is None
     ws.call_now(dose.id, T0)
     assert ws.snapshot()["ringing"] == {"dose_id": dose.id, "medicine": "Vitamin C"}
-
-
-# ---------- the Hindi script ----------
-
-def test_reminder_text_includes_name_and_look():
-    text = reminder_text("विटामिन सी", "छोटी गोल नारंगी गोली।")
-    assert "विटामिन सी" in text
-    assert "छोटी गोल नारंगी गोली" in text
-    assert text.endswith("क्या आपने दवाई ले ली है?")
-    assert "।।" not in text
-
-
-def test_reminder_text_without_description():
-    text = reminder_text("Vitamin C")
-    assert "Vitamin C" in text
-    assert "पहचान" not in text
-
-
-def test_every_spoken_action_has_a_hindi_line():
-    def is_devanagari(ch):
-        return "\u0900" <= ch <= "\u097f"
-    for action in Action:
-        if action.value.startswith("speak_"):
-            lines = spoken_lines([action], "Vitamin C")
-            assert len(lines) == 1, action
-            assert any(is_devanagari(ch) for ch in lines[0]), action

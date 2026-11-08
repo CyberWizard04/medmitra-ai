@@ -14,12 +14,13 @@ from medmitra.reminder import Action, DoseReminder, Event, InvalidTransition, St
 from medmitra.script import ALERT_TEXT, spoken_lines
 
 MAX_NAME = 60
+MAX_PARENT_NAME = 40
 MAX_APPEARANCE = 160
 MAX_REPLY_TEXT = 500
 MAX_MEDICINES = 10
 MAX_DOSES = 60
 RING_SECONDS = 30
-REPLY_LABELS = ("taken", "not_taken", "unclear", "needs_help", "off_topic")
+REPLY_LABELS = ("taken", "not_taken", "unclear", "needs_help", "off_topic", "asks_medicine")
 
 _STATUS = {
     State.PENDING: "scheduled",
@@ -87,7 +88,7 @@ class Dose:
 
 
 class Workspace:
-    def __init__(self, parent_name="Demo Parent"):
+    def __init__(self, parent_name=""):
         self.parent_name = parent_name
         self.medicines = {}
         self.doses = {}
@@ -128,7 +129,7 @@ class Workspace:
     def _record_actions(self, dose, actions, now):
         """Write what the agent said and raise alerts. Returns the spoken lines."""
         medicine = self.medicines[dose.medicine_id]
-        lines = spoken_lines(actions, medicine.name, medicine.appearance)
+        lines = spoken_lines(actions, self.parent_name, medicine.name, medicine.appearance)
         for line in lines:
             self._note(dose, "agent", line, now)
         if not dose.sample:
@@ -164,6 +165,18 @@ class Workspace:
             "attempts": dose.reminder.attempts,
             "sample": dose.sample,
         }
+
+    def set_parent_name(self, name):
+        """Who the agent greets. Blank means no name is used."""
+        self.parent_name = _clean(name, MAX_PARENT_NAME, "Parent name")
+        return self.parent_name
+
+    def last_agent_line(self, dose_id):
+        """The last thing the agent said on this dose: what the parent is answering."""
+        for line in reversed(self._dose(dose_id).transcript):
+            if line["speaker"] == "agent":
+                return line["text"]
+        return None
 
     # ---------- caretaker actions ----------
     def add_medicine(self, name, appearance=""):

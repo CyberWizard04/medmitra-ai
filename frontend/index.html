@@ -42,6 +42,7 @@ details{border-top:1px solid var(--line);padding:6px 0}summary{cursor:pointer;fo
 <div class="row"><span id="sample" class="tag" hidden>Sample data</span><button class="alt" onclick="resetDemo()">Reset demo</button></div></div>
 <div id="alerts"></div>
 <div class="card"><h2>Medicines taken</h2><div class="stats" id="stats"></div><div id="meds" style="margin-top:8px"></div><div id="days"></div></div>
+<div class="card"><h2>Parent</h2><div class="row"><input id="pname" placeholder="Parent’s name, e.g. Atharv" maxlength="40"><button onclick="saveName()">Save name</button></div></div>
 <div class="card"><h2>Add a medicine</h2><div class="row"><input id="mn" placeholder="Medicine name" maxlength="60"><input id="ma" placeholder="How it looks, e.g. small round orange tablet" maxlength="160"><button onclick="addMed()">Save</button></div></div>
 <div class="card"><h2>Schedule a call</h2><div class="row"><select id="msel"></select><input id="mins" type="number" min="0" max="1440" value="1" style="max-width:80px;flex:none"><span class="sm" style="padding:0">minutes from now</span></div>
 <div class="row" style="margin-top:8px"><button onclick="sched(+$('mins').value)">Schedule</button><button class="grn" onclick="sched(0)">Call now</button><button class="alt" onclick="preview()">Hear what the parent hears</button></div></div>
@@ -77,7 +78,7 @@ async function connect(){
 async function poll(){try{S=await api(`/api/w/${wid}/state`);render()}catch(e){if(e.status===404){try{localStorage.removeItem("mm_wid")}catch(x){}location.reload()}}}
 function render(){
  const t=S.summary.totals;
- $("sample").hidden=!S.has_sample_data;
+ $("sample").hidden=!S.has_sample_data;if(document.activeElement!==$("pname"))$("pname").value=S.parent_name||"";
  $("alerts").innerHTML=S.alerts.slice(0,3).map(a=>`<div class="al ${esc(a.level)}">${esc(a.message)}</div>`).join("");
  $("stats").innerHTML=[["Taken",t.taken,"ok"],["Missed",t.missed,"warn"],["Needs help",t.needs_help,"bad"],["Waiting",t.waiting,""],["Adherence",t.adherence_percent==null?"–":t.adherence_percent+"%",""]].map(x=>`<div class="stat ${x[2]}"><b>${x[1]}</b>${x[0]}</div>`).join("");
  $("meds").innerHTML=S.summary.per_medicine.map(m=>`<div class="row sm"><span>${esc(m.medicine)}</span><span>${m.taken} taken · ${m.missed} missed · ${m.needs_help} help · ${m.waiting} waiting</span></div>`).join("");
@@ -97,7 +98,9 @@ async function addMed(){try{const d=await post(`/api/w/${wid}/medicines`,{name:$
 async function sched(m){const id=$("msel").value;if(!id)return note("Add a medicine first.");
  try{const d=await post(`/api/w/${wid}/doses`,{medicine_id:id,in_minutes:Math.max(0,Math.min(1440,m||0))});S=d.state;render();if(m)note("Scheduled. The phone will ring in "+m+" min while this page is open.");else poll()}catch(e){note(e.message)}}
 async function callDose(id){try{S=await post(`/api/w/${wid}/doses/${id}/call`);render()}catch(e){note(e.message)}}
-function preview(){const id=$("msel").value;if(!id)return;note("Loading voice…");const a=new Audio(API+`/api/w/${wid}/audio/reminder/${id}`);a.onerror=()=>note("Voice is not available right now.");a.play().then(()=>{$("msg").hidden=true}).catch(()=>note("Voice is not available right now."))}
+async function preview(){const id=$("msel").value;if(!id)return note("Add a medicine first.");note("Loading voice…");
+ try{const r=await api(`/api/w/${wid}/preview/${id}`);$("msg").hidden=true;for(const l of r.say)await speak(l)}catch(e){note("Voice is not available right now.")}}
+async function saveName(){try{S=await post(`/api/w/${wid}/parent`,{name:$("pname").value});render();note("Name saved. The agent will greet them by name.")}catch(e){note(e.message)}}
 async function resetDemo(){try{S=await post(`/api/w/${wid}/reset`);histSig="";if(call)end("Call ended");render()}catch(e){note(e.message)}}
 function setPh(s,msg){ph=s;$("pst").textContent=msg||"";const on=(id,v)=>{$(id).hidden=!v};
  on("ans",s==="ringing");on("talk",s==="talking"&&!!stream);on("stp",s==="listening");on("typed",s==="talking");on("hang",s==="talking"||s==="listening");on("lvlw",s==="listening");$("phone").classList.toggle("ringing",s==="ringing")}
