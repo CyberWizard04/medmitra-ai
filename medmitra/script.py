@@ -7,6 +7,7 @@ repeated, never interpreted. Alerts for the caretaker are always English.
 """
 from medmitra.languages import DEFAULT_LANGUAGE
 from medmitra.reminder import Action
+from medmitra.packs_extra import EXTRA_PACKS
 
 PACKS = {
     "hi": {
@@ -56,6 +57,9 @@ PACKS = {
         },
     },
 }
+
+
+PACKS.update(EXTRA_PACKS)  # the other Gnani languages: drafts until a fluent speaker checks them
 
 
 def _pack(lang=DEFAULT_LANGUAGE):

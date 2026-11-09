@@ -27,11 +27,22 @@ SAFETY_TERMS = [
     "behosh", "bewosh", "faint", "बेहोश",
     "saans", "breath", "सांस",
     "help", "madad", "bachao", "ambulance",
+    # Marathi, Gujarati, Punjabi, Bengali, Tamil, Telugu, Kannada, Malayalam.
+    # DRAFT lists: they need a fluent speaker's check. A false alarm is fine, a miss is not.
+    "छाती", "भोवळ", "दुखत", "वेदना", "बेशुद्ध", "दम लागत", "श्वास", "मदत", "वाचवा", "रुग्णवाहिका",
+    "દુખાવો", "દુખે", "છાતી", "ચક્કર", "બેભાન", "શ્વાસ", "મદદ", "બચાવો", "એમ્બ્યુલન્સ",
+    "ਦਰਦ", "ਛਾਤੀ", "ਚੱਕਰ", "ਬੇਹੋਸ਼", "ਸਾਹ", "ਮਦਦ", "ਬਚਾਓ", "ਐਂਬੂਲੈਂਸ",
+    "ব্যথা", "বুক", "মাথা ঘুর", "অজ্ঞান", "শ্বাস", "সাহায্য", "বাঁচাও", "অ্যাম্বুলেন্স",
+    "வலி", "நெஞ்சு", "மயக்கம்", "தலை சுற்ற", "மூச்சு", "உதவி", "காப்பாற்று", "ஆம்புலன்ஸ்",
+    "నొప్పి", "ఛాతీ", "ఛాతి", "గుండె", "తల తిర", "కళ్ళు తిర", "కళ్లు తిర", "స్పృహ", "ఊపిరి", "సహాయం", "కాపాడండి", "అంబులెన్స్",
+    "ನೋವು", "ಎದೆ", "ತಲೆ ಸುತ್ತ", "ತಲೆ ತಿರುಗ", "ಮೂರ್ಛೆ", "ಉಸಿರ", "ಸಹಾಯ", "ಕಾಪಾಡಿ", "ಆಂಬ್ಯುಲೆನ್ಸ್",
+    "വേദന", "നെഞ്ച", "തലകറക്ക", "ബോധക്ഷയ", "ശ്വാസ", "സഹായം", "രക്ഷിക്കൂ", "ആംബുലൻസ്",
 ]
 
 SYSTEM_PROMPT = """You classify ONE spoken reply from an elderly person during a medicine
 reminder call. The agent has just asked whether they are taking their medicine, and you
-see that question first. The reply may be English, Hindi or Hinglish, and speech
+see that question first. The reply may be in English, Hindi, Hinglish or another Indian language
+(Marathi, Gujarati, Punjabi, Bengali, Tamil, Telugu, Kannada, Malayalam), and speech
 recognition can make small mistakes, so judge the meaning.
 Answer with exactly one of these words and nothing else:
 taken - they say they already took it, are taking it right now, or answer the question

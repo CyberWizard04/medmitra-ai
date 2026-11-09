@@ -65,7 +65,7 @@ details{border-top:1px solid var(--line);padding:6px 0}summary{cursor:pointer;fo
 <div class="ch wide"><h3>What the parent said</h3><div id="c-said"></div></div>
 </div></div>
 <div class="card"><h2>Parent</h2><div class="row"><input id="pname" placeholder="Parent’s name, e.g. Atharv" maxlength="40"><button onclick="saveName()">Save name</button></div><div class="row" style="margin-top:8px"><span class="sm" style="padding:0">Language the agent speaks</span><select id="lang" onchange="setLang()"></select></div></div>
-<div class="card"><h2>Add a medicine</h2><div class="row"><input id="mn" placeholder="Medicine name" maxlength="60"><input id="ma" placeholder="How it looks, e.g. small round orange tablet" maxlength="160"><button onclick="addMed()">Save</button></div></div>
+<div class="card"><h2>Add a medicine</h2><div class="row"><input id="mn" placeholder="Medicine name" maxlength="60"><input id="ma" placeholder="Write the medicine description in the language you want it to say" maxlength="160"><button onclick="addMed()">Save</button></div></div>
 <div class="card"><h2>Schedule a call</h2><div class="row"><select id="msel"></select><input id="mins" type="number" min="0" max="1440" value="1" style="max-width:80px;flex:none"><span class="sm" style="padding:0">minutes from now</span></div>
 <div class="row" style="margin-top:8px"><button onclick="sched(+$('mins').value)">Schedule</button><button class="grn" onclick="sched(0)">Call now</button><button class="alt" onclick="preview()">Hear what the parent hears</button></div></div>
 <div class="card"><h2>Doses</h2><div id="doses"></div></div>
@@ -224,9 +224,9 @@ function renderDash(){
 }
 let langSig="";
 function fillLang(){const L=S.languages||[],sel=$("lang"),sig=L.map(x=>x.code).join();
- if(sig!==langSig){langSig=sig;sel.innerHTML=L.map(x=>`<option value="${esc(x.code)}">${esc(x.native)} · ${esc(x.name)}</option>`).join("")}
- if(document.activeElement!==sel)sel.value=S.language||"hi"}
-async function setLang(){try{S=await post(`/api/w/${wid}/language`,{language:$("lang").value});render();const L=(S.languages||[]).find(x=>x.code===S.language);note("Language changed to "+(L?L.name:S.language)+". Type the medicine description in the same language.")}catch(e){note(e.message)}}
+ if(sig!==langSig){langSig=sig;sel.innerHTML=L.map(x=>`<option value="${esc(x.code)}">${esc(x.native)} · ${esc(x.name)}${x.reviewed?"":" (draft)"}</option>`).join("")}
+ if(document.activeElement!==sel)sel.value=S.language||"hi";const cur=L.find(x=>x.code===S.language);$("ma").placeholder="Write the medicine description in "+(cur?cur.name:"the language you chose")+" (the agent says it exactly as typed)"}
+async function setLang(){try{S=await post(`/api/w/${wid}/language`,{language:$("lang").value});render();const L=(S.languages||[]).find(x=>x.code===S.language);note("Language changed to "+(L?L.name:S.language)+"."+(L&&!L.reviewed?" Draft wording: not yet checked by a fluent speaker.":"")+" Write the medicine description in this language.")}catch(e){note(e.message)}}
 async function toggleSample(){const had=S.has_sample_data;try{S=await post(`/api/w/${wid}/sample/${had?"clear":"restore"}`);histSig="";render();note(had?"Sample data cleared. Only your own calls are counted now.":"Sample data restored.")}catch(e){note(e.message)}}
 connect();
 </script></body></html>
