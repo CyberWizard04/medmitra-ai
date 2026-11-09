@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 
 from medmitra.config import APP_TIMEZONE
 from medmitra.reminder import Action, DoseReminder, Event, InvalidTransition, State
+from medmitra.languages import DEFAULT_LANGUAGE, LANGUAGES, get_language, language_list
 from medmitra.script import ALERT_TEXT, spoken_lines
 
 MAX_NAME = 60
@@ -93,6 +94,7 @@ class Workspace:
         self.medicines = {}
         self.doses = {}
         self.alerts = []
+        self.language = DEFAULT_LANGUAGE
 
     # ---------- small helpers ----------
     @staticmethod
@@ -129,7 +131,8 @@ class Workspace:
     def _record_actions(self, dose, actions, now):
         """Write what the agent said and raise alerts. Returns the spoken lines."""
         medicine = self.medicines[dose.medicine_id]
-        lines = spoken_lines(actions, self.parent_name, medicine.name, medicine.appearance)
+        lines = spoken_lines(actions, self.parent_name, medicine.name, medicine.appearance,
+                             self.language)
         for line in lines:
             self._note(dose, "agent", line, now)
         if not dose.sample:
@@ -314,6 +317,9 @@ class Workspace:
         ordered = sorted(self.doses.values(), key=lambda d: d.due_at, reverse=True)
         return {
             "parent_name": self.parent_name,
+            "language": self.language,
+            "language_tag": get_language(self.language).tts_code,
+            "languages": language_list(),
             "medicines": [asdict(m) for m in self.medicines.values()],
             "doses": [self._dose_view(d) for d in ordered],
             "alerts": list(reversed(self.alerts[-20:])),
@@ -333,6 +339,44 @@ class Workspace:
                 row["transcript"] = list(dose.transcript)
                 rows.append(row)
         return rows
+
+    # ---------- language and sample data ----------
+    SAMPLE_MEDICINES = 2   # what load_sample_history adds
+    SAMPLE_DOSES = 14
+
+    def set_language(self, code):
+        """The language the agent speaks and listens in."""
+        code = str(code or "").strip().lower()
+        if code not in LANGUAGES:
+            raise BadRequest("That language is not supported.")
+        self.language = code
+        return code
+
+    def clear_sample_data(self):
+        """Removes the fake history. A sample medicine a real dose still uses is kept."""
+        for dose_id in [d.id for d in self.doses.values() if d.sample]:
+            del self.doses[dose_id]
+        in_use = {d.medicine_id for d in self.doses.values()}
+        for medicine in list(self.medicines.values()):
+            if medicine.sample:
+                if medicine.id in in_use:
+                    medicine.sample = False
+                else:
+                    del self.medicines[medicine.id]
+
+    def restore_sample_data(self, now=None):
+        """Brings the fake history back. The sample calls are always in Hindi."""
+        if any(d.sample for d in self.doses.values()):
+            raise Conflict("Sample data is already loaded.")
+        if (len(self.medicines) + self.SAMPLE_MEDICINES > MAX_MEDICINES
+                or len(self.doses) + self.SAMPLE_DOSES > MAX_DOSES):
+            raise BadRequest("There is not enough room for the sample data. Use Reset demo instead.")
+        keep = self.language
+        self.language = DEFAULT_LANGUAGE
+        try:
+            self.load_sample_history(now)
+        finally:
+            self.language = keep
 
     # ---------- sample data ----------
     def load_sample_history(self, now=None):

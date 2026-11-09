@@ -53,7 +53,7 @@ details{border-top:1px solid var(--line);padding:6px 0}summary{cursor:pointer;fo
 <div class="wrap">
 <div class="main">
 <div class="row sp" style="margin-bottom:12px"><h1>MedMitra AI <small style="font-weight:400;color:var(--mute)">· Caretaker</small></h1>
-<div class="row"><span id="sample" class="tag" hidden>Sample data</span><button class="alt" onclick="resetDemo()">Reset demo</button></div></div>
+<div class="row"><span id="sample" class="tag" hidden>Sample data</span><button class="alt" id="sbtn" onclick="toggleSample()">Clear sample data</button><button class="alt" onclick="resetDemo()">Reset demo</button></div></div>
 <div id="alerts"></div>
 <div class="card"><div class="row sp"><h2 style="margin:0">Analytics</h2><span class="sm" style="padding:0">Updates every 2 seconds</span></div>
 <div class="stats" id="kpis" style="margin:10px 0"></div>
@@ -64,7 +64,7 @@ details{border-top:1px solid var(--line);padding:6px 0}summary{cursor:pointer;fo
 <div class="ch"><h3>By medicine</h3><div id="c-meds"></div></div>
 <div class="ch wide"><h3>What the parent said</h3><div id="c-said"></div></div>
 </div></div>
-<div class="card"><h2>Parent</h2><div class="row"><input id="pname" placeholder="Parent’s name, e.g. Atharv" maxlength="40"><button onclick="saveName()">Save name</button></div></div>
+<div class="card"><h2>Parent</h2><div class="row"><input id="pname" placeholder="Parent’s name, e.g. Atharv" maxlength="40"><button onclick="saveName()">Save name</button></div><div class="row" style="margin-top:8px"><span class="sm" style="padding:0">Language the agent speaks</span><select id="lang" onchange="setLang()"></select></div></div>
 <div class="card"><h2>Add a medicine</h2><div class="row"><input id="mn" placeholder="Medicine name" maxlength="60"><input id="ma" placeholder="How it looks, e.g. small round orange tablet" maxlength="160"><button onclick="addMed()">Save</button></div></div>
 <div class="card"><h2>Schedule a call</h2><div class="row"><select id="msel"></select><input id="mins" type="number" min="0" max="1440" value="1" style="max-width:80px;flex:none"><span class="sm" style="padding:0">minutes from now</span></div>
 <div class="row" style="margin-top:8px"><button onclick="sched(+$('mins').value)">Schedule</button><button class="grn" onclick="sched(0)">Call now</button><button class="alt" onclick="preview()">Hear what the parent hears</button></div></div>
@@ -96,11 +96,11 @@ async function connect(){
   if(wid){try{S=await api(`/api/w/${wid}/state`)}catch(e){if(e.status!==404)throw e;wid=null}}
   if(!wid){const d=await post("/api/w");wid=d.id;S=d.state;try{localStorage.setItem("mm_wid",wid)}catch(e){}}
   break}catch(e){await new Promise(r=>setTimeout(r,3000))}}
- $("msg").hidden=true;render();post("/api/warmup").catch(()=>{});setInterval(poll,2000)}
+ $("msg").hidden=true;render();post("/api/warmup?lang="+(S.language||"hi")).catch(()=>{});setInterval(poll,2000)}
 async function poll(){try{S=await api(`/api/w/${wid}/state`);render()}catch(e){if(e.status===404){try{localStorage.removeItem("mm_wid")}catch(x){}location.reload()}}}
 function render(){
  const t=S.summary.totals;
- $("sample").hidden=!S.has_sample_data;if(document.activeElement!==$("pname"))$("pname").value=S.parent_name||"";
+ $("sample").hidden=!S.has_sample_data;if(document.activeElement!==$("pname"))$("pname").value=S.parent_name||"";fillLang();$("sbtn").textContent=S.has_sample_data?"Clear sample data":"Restore sample data";
  $("alerts").innerHTML=S.alerts.slice(0,3).map(a=>`<div class="al ${esc(a.level)}">${esc(a.message)}</div>`).join("");
  renderDash();
  const ms=S.medicines.map(m=>m.id+m.name).join();
@@ -124,7 +124,7 @@ async function resetDemo(){try{S=await post(`/api/w/${wid}/reset`);histSig="";if
 function setPh(s,msg){ph=s;$("pst").textContent=msg||"";const on=(id,v)=>{$(id).hidden=!v};
  on("ans",s==="ringing");on("talk",s==="talking"&&!!stream);on("stp",s==="listening");on("typed",s==="talking");on("hang",s==="talking"||s==="listening");on("lvlw",s==="listening");$("phone").classList.toggle("ringing",s==="ringing")}
 function bubble(c,t){const d=document.createElement("div");d.className="b "+c;d.textContent=t;$("chat").append(d);$("chat").scrollTop=1e9}
-function speak(l){return new Promise(res=>{let f=0;const fb=()=>{if(f++)return;try{const u=new SpeechSynthesisUtterance(l.text);u.lang="hi-IN";u.onend=u.onerror=()=>res();speechSynthesis.speak(u)}catch(e){res()}};
+function speak(l){return new Promise(res=>{let f=0;const fb=()=>{if(f++)return;try{const u=new SpeechSynthesisUtterance(l.text);u.lang=(S&&S.language_tag)||"hi-IN";u.onend=u.onerror=()=>res();speechSynthesis.speak(u)}catch(e){res()}};
  if(!l.audio)return fb();const a=new Audio(API+l.audio);a.onended=()=>res();a.onerror=fb;a.play().catch(fb)})}
 async function answer(){
  const id=ringId;setPh("speaking","Connecting…");
@@ -222,5 +222,11 @@ function renderDash(){
  $("c-meds").innerHTML=medBars(sm.per_medicine);
  $("c-said").innerHTML=saidBars(sm.replies||{});
 }
+let langSig="";
+function fillLang(){const L=S.languages||[],sel=$("lang"),sig=L.map(x=>x.code).join();
+ if(sig!==langSig){langSig=sig;sel.innerHTML=L.map(x=>`<option value="${esc(x.code)}">${esc(x.native)} · ${esc(x.name)}</option>`).join("")}
+ if(document.activeElement!==sel)sel.value=S.language||"hi"}
+async function setLang(){try{S=await post(`/api/w/${wid}/language`,{language:$("lang").value});render();const L=(S.languages||[]).find(x=>x.code===S.language);note("Language changed to "+(L?L.name:S.language)+". Type the medicine description in the same language.")}catch(e){note(e.message)}}
+async function toggleSample(){const had=S.has_sample_data;try{S=await post(`/api/w/${wid}/sample/${had?"clear":"restore"}`);histSig="";render();note(had?"Sample data cleared. Only your own calls are counted now.":"Sample data restored.")}catch(e){note(e.message)}}
 connect();
 </script></body></html>
