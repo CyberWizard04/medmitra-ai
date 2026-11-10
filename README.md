@@ -850,6 +850,6 @@ medmitra-ai/
 
 - **Licence:** none has been chosen yet. Until a licence file is added, all rights are reserved by default. Add one before others reuse the code.
 - **This is not a medical device and gives no medical advice.** It is a hackathon prototype. Do not rely on it for real patients. Do not enter real patient data.
-- **Built with:** Gnani Vachana (voice and speech recognition), Groq (AI), Render and Vercel (hosting). Developed in Google Colab with an AI coding assistant (Claude) and verified step by step with the evidence recorded in section 10.
+- **Built with:** Gnani Vachana (voice and speech recognition), Groq (AI), Render and Vercel (hosting).
 
 *Last updated: November 2026.*
