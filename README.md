@@ -1,5 +1,11 @@
 # MedMitra AI
 
+## The problem and our solution
+
+**The problem.** Many elderly people take medicines on their own, often living alone or far from their family. They forget doses, and the family finds out late, if at all. A typical alarm or notification only beeps or shows text: it cannot hear the answer, cannot notice "yes, but my chest hurts", and expects the person to read a screen.
+
+**Our solution.** MedMitra AI starts a voice call with the parent, greets them by name, says which medicine to take and what it looks like, and listens to the reply in their own language. The caretaker (a son, daughter or nurse) sees the result on a live dashboard within about two seconds, with the full conversation. If the parent mentions pain, dizziness or trouble breathing, or asks for help, an urgent alert appears on the dashboard at once.
+
 > A voice medication-reminder agent for elderly parents, with a live dashboard for the family member who looks after them. It speaks and listens in 10 Indian languages, powered by Gnani's voice and speech APIs.
 
 | | |
